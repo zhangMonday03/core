@@ -575,7 +575,6 @@ FLOWS = {
         "peblar",
         "peco",
         "pegel_online",
-        "permobil",
         "pglab",
         "philips_js",
         "pi_hole",
