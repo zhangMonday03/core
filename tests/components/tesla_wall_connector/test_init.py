@@ -18,9 +18,9 @@ import homeassistant.helpers.device_registry as dr
 from .conftest import (
     create_wall_connector_entry,
     get_default_version_data,
-    get_lifetime_mock,
-    get_vitals_mock,
-    get_wifi_status_mock,
+    get_lifetime_data,
+    get_vitals_data,
+    get_wifi_status_data,
 )
 
 from tests.common import MockConfigEntry
@@ -33,9 +33,9 @@ async def test_init_success(
 
     entry = await create_wall_connector_entry(
         hass,
-        vitals_data=get_vitals_mock(),
-        lifetime_data=get_lifetime_mock(),
-        wifi_status_data=get_wifi_status_mock(),
+        vitals_data=get_vitals_data(),
+        lifetime_data=get_lifetime_data(),
+        wifi_status_data=get_wifi_status_data(),
     )
 
     assert entry.state is ConfigEntryState.LOADED
@@ -62,14 +62,15 @@ async def test_load_unload(hass: HomeAssistant) -> None:
 
     entry = await create_wall_connector_entry(
         hass,
-        vitals_data=get_vitals_mock(),
-        lifetime_data=get_lifetime_mock(),
-        wifi_status_data=get_wifi_status_mock(),
+        vitals_data=get_vitals_data(),
+        lifetime_data=get_lifetime_data(),
+        wifi_status_data=get_wifi_status_data(),
     )
     assert entry.state is ConfigEntryState.LOADED
 
-    await hass.config_entries.async_unload(entry.entry_id)
+    assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.NOT_LOADED
 
 
 async def test_init_uses_split_phase_option(hass: HomeAssistant) -> None:
@@ -86,11 +87,12 @@ async def test_init_uses_split_phase_option(hass: HomeAssistant) -> None:
     ) as wall_connector:
         client = wall_connector.return_value
         client.async_get_version = AsyncMock(return_value=get_default_version_data())
-        client.async_get_vitals = AsyncMock(return_value=get_vitals_mock())
-        client.async_get_lifetime = AsyncMock(return_value=get_lifetime_mock())
-        client.async_get_wifi_status = AsyncMock(return_value=get_wifi_status_mock())
+        client.async_get_vitals = AsyncMock(return_value=get_vitals_data())
+        client.async_get_lifetime = AsyncMock(return_value=get_lifetime_data())
+        client.async_get_wifi_status = AsyncMock(return_value=get_wifi_status_data())
 
-        await hass.config_entries.async_setup(entry.entry_id)
+        assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
+    assert entry.state is ConfigEntryState.LOADED
     assert wall_connector.call_args.kwargs[CONF_SPLIT_PHASE] is True

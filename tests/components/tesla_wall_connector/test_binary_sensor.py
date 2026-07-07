@@ -5,9 +5,9 @@ from homeassistant.core import HomeAssistant
 from .conftest import (
     EntityAndExpectedValues,
     _test_sensors,
-    get_lifetime_mock,
-    get_vitals_mock,
-    get_wifi_status_mock,
+    get_lifetime_data,
+    get_vitals_data,
+    get_wifi_status_data,
 )
 
 
@@ -23,22 +23,20 @@ async def test_sensors(hass: HomeAssistant) -> None:
         ),
     ]
 
-    mock_vitals_first_update = get_vitals_mock()
-
-    mock_vitals_second_update = get_vitals_mock()
-    mock_vitals_second_update.contactor_closed = True
-    mock_vitals_second_update.vehicle_connected = False
-
-    lifetime_mock = get_lifetime_mock()
-    wifi_status_mock = get_wifi_status_mock()
+    vitals_first_update = get_vitals_data()
+    vitals_second_update = get_vitals_data(
+        contactor_closed=True, vehicle_connected=False
+    )
+    lifetime_data = get_lifetime_data()
+    wifi_status_data = get_wifi_status_data()
 
     await _test_sensors(
         hass,
         entities_and_expected_values=entity_and_expected_values,
-        vitals_first_update=mock_vitals_first_update,
-        vitals_second_update=mock_vitals_second_update,
-        lifetime_first_update=lifetime_mock,
-        lifetime_second_update=lifetime_mock,
-        wifi_status_first_update=wifi_status_mock,
-        wifi_status_second_update=wifi_status_mock,
+        vitals_first_update=vitals_first_update,
+        vitals_second_update=vitals_second_update,
+        lifetime_first_update=lifetime_data,
+        lifetime_second_update=lifetime_data,
+        wifi_status_first_update=wifi_status_data,
+        wifi_status_second_update=wifi_status_data,
     )

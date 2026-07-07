@@ -5,9 +5,9 @@ from homeassistant.core import HomeAssistant
 from .conftest import (
     EntityAndExpectedValues,
     _test_sensors,
-    get_lifetime_mock,
-    get_vitals_mock,
-    get_wifi_status_mock,
+    get_lifetime_data,
+    get_vitals_data,
+    get_wifi_status_data,
 )
 
 
@@ -66,40 +66,35 @@ async def test_sensors(hass: HomeAssistant) -> None:
         EntityAndExpectedValues("sensor.tesla_wall_connector_wifi_rssi", "-42", "-54"),
     ]
 
-    mock_vitals_first_update = get_vitals_mock()
-
-    mock_vitals_second_update = get_vitals_mock()
-    mock_vitals_second_update.evse_state = 3
-    mock_vitals_second_update.handle_temp_c = -1.42
-    mock_vitals_second_update.pcba_temp_c = -1.2
-    mock_vitals_second_update.mcu_temp_c = -1
-    mock_vitals_second_update.grid_v = 229.21
-    mock_vitals_second_update.grid_hz = 49.981
-    mock_vitals_second_update.voltageA_v = 228.1
-    mock_vitals_second_update.voltageB_v = 229.1
-    mock_vitals_second_update.voltageC_v = 230
-    mock_vitals_second_update.currentA_a = 7
-    mock_vitals_second_update.currentB_a = 8
-    mock_vitals_second_update.currentC_a = 9
-    mock_vitals_second_update.vehicle_current_a = 16
-    mock_vitals_second_update.total_power_w = 5499.5
-    mock_vitals_second_update.session_energy_wh = 112.2
-
-    lifetime_mock_first_update = get_lifetime_mock()
-    lifetime_mock_first_update.energy_wh = 988022
-    lifetime_mock_second_update = get_lifetime_mock()
-    lifetime_mock_second_update.energy_wh = 989000
-    wifi_status_mock_first_update = get_wifi_status_mock()
-    wifi_status_mock_second_update = get_wifi_status_mock()
-    wifi_status_mock_second_update.wifi_rssi = -54
+    vitals_first_update = get_vitals_data()
+    vitals_second_update = get_vitals_data(
+        currentA_a=7,
+        currentB_a=8,
+        currentC_a=9,
+        evse_state=3,
+        grid_hz=49.981,
+        grid_v=229.21,
+        handle_temp_c=-1.42,
+        mcu_temp_c=-1,
+        pcba_temp_c=-1.2,
+        session_energy_wh=112.2,
+        vehicle_current_a=16,
+        voltageA_v=228.1,
+        voltageB_v=229.1,
+        voltageC_v=230,
+    )
+    lifetime_first_update = get_lifetime_data()
+    lifetime_second_update = get_lifetime_data(energy_wh=989000)
+    wifi_status_first_update = get_wifi_status_data()
+    wifi_status_second_update = get_wifi_status_data(wifi_rssi=-54)
 
     await _test_sensors(
         hass,
         entities_and_expected_values=entity_and_expected_values,
-        vitals_first_update=mock_vitals_first_update,
-        vitals_second_update=mock_vitals_second_update,
-        lifetime_first_update=lifetime_mock_first_update,
-        lifetime_second_update=lifetime_mock_second_update,
-        wifi_status_first_update=wifi_status_mock_first_update,
-        wifi_status_second_update=wifi_status_mock_second_update,
+        vitals_first_update=vitals_first_update,
+        vitals_second_update=vitals_second_update,
+        lifetime_first_update=lifetime_first_update,
+        lifetime_second_update=lifetime_second_update,
+        wifi_status_first_update=wifi_status_first_update,
+        wifi_status_second_update=wifi_status_second_update,
     )
