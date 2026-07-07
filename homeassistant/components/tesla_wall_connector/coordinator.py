@@ -6,10 +6,7 @@ import logging
 from typing import override
 
 from tesla_wall_connector import WallConnector
-from tesla_wall_connector.exceptions import (
-    WallConnectorConnectionError,
-    WallConnectorError,
-)
+from tesla_wall_connector.exceptions import WallConnectorError
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -69,11 +66,6 @@ class WallConnectorCoordinator(DataUpdateCoordinator[dict]):
             vitals = await self._wall_connector.async_get_vitals()
             lifetime = await self._wall_connector.async_get_lifetime()
             wifi_status = await self._wall_connector.async_get_wifi_status()
-        except WallConnectorConnectionError as ex:
-            raise UpdateFailed(
-                f"Could not fetch data from Tesla WallConnector at {self._hostname}:"
-                f" {ex}"
-            ) from ex
         except WallConnectorError as ex:
             raise UpdateFailed(
                 f"Could not fetch data from Tesla WallConnector at {self._hostname}:"
