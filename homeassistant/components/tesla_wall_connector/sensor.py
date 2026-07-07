@@ -11,6 +11,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import (
+    SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
     EntityCategory,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
@@ -22,7 +23,11 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import WALLCONNECTOR_DATA_LIFETIME, WALLCONNECTOR_DATA_VITALS
+from .const import (
+    WALLCONNECTOR_DATA_LIFETIME,
+    WALLCONNECTOR_DATA_VITALS,
+    WALLCONNECTOR_DATA_WIFI_STATUS,
+)
 from .coordinator import WallConnectorConfigEntry, WallConnectorData
 from .entity import WallConnectorEntity, WallConnectorLambdaValueGetterMixin
 
@@ -112,6 +117,15 @@ WALL_CONNECTOR_SENSORS = [
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     WallConnectorSensorDescription(
+        key="vehicle_current_a",
+        translation_key="vehicle_current_a",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        value_fn=lambda data: data[WALLCONNECTOR_DATA_VITALS].vehicle_current_a,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    WallConnectorSensorDescription(
         key="current_a_a",
         translation_key="current_a_a",
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
@@ -185,11 +199,21 @@ WALL_CONNECTOR_SENSORS = [
     ),
     WallConnectorSensorDescription(
         key="energy_kWh",
+        translation_key="energy_kwh",
         native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
         suggested_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         value_fn=lambda data: data[WALLCONNECTOR_DATA_LIFETIME].energy_wh,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
+    ),
+    WallConnectorSensorDescription(
+        key="wifi_rssi",
+        translation_key="wifi_rssi",
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        value_fn=lambda data: data[WALLCONNECTOR_DATA_WIFI_STATUS].wifi_rssi,
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
 ]
 
