@@ -1,4 +1,4 @@
-"""Test the Tesla Wall Connector config flow."""
+"""Test the Tesla Wall Connector integration setup."""
 
 from unittest.mock import AsyncMock, patch
 

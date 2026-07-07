@@ -22,6 +22,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.typing import StateType
 
 from .const import (
     WALLCONNECTOR_DATA_LIFETIME,
@@ -52,6 +53,8 @@ class WallConnectorSensorDescription(
     SensorEntityDescription, WallConnectorLambdaValueGetterMixin
 ):
     """Sensor entity description with a function pointer for getting sensor value."""
+
+    suggested_object_id: str | None = None
 
 
 WALL_CONNECTOR_SENSORS = [
@@ -200,6 +203,7 @@ WALL_CONNECTOR_SENSORS = [
     WallConnectorSensorDescription(
         key="energy_kWh",
         translation_key="energy_kwh",
+        suggested_object_id="energy",
         native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
         suggested_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         value_fn=lambda data: data[WALLCONNECTOR_DATA_LIFETIME].energy_wh,
@@ -209,6 +213,7 @@ WALL_CONNECTOR_SENSORS = [
     WallConnectorSensorDescription(
         key="wifi_rssi",
         translation_key="wifi_rssi",
+        suggested_object_id="wifi_rssi",
         native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
         value_fn=lambda data: data[WALLCONNECTOR_DATA_WIFI_STATUS].wifi_rssi,
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
@@ -250,7 +255,18 @@ class WallConnectorSensorEntity(WallConnectorEntity, SensorEntity):
 
     @property
     @override
-    def native_value(self):
+    def suggested_object_id(self) -> str | None:
+        """Return suggested object id."""
+        if self.entity_description.suggested_object_id is not None:
+            return self.entity_description.suggested_object_id
+
+        return super().suggested_object_id
+
+    @property
+    @override
+    def native_value(
+        self,
+    ) -> StateType:
         """Return the state of the sensor."""
 
         return self.entity_description.value_fn(self.coordinator.data)

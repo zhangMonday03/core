@@ -46,7 +46,7 @@
         "name": "Phase C current"
       },
       "energy_kwh": {
-        "name": "Energy"
+        "name": "Lifetime energy"
       },
       "grid_hz": {
         "name": "Grid frequency"
