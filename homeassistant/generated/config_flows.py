@@ -799,6 +799,7 @@ FLOWS = {
         "triggercmd",
         "trmnl",
         "tuya",
+        "tween_light_ir",
         "twentemilieu",
         "twilio",
         "twinkly",
