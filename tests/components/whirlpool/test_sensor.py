@@ -1,6 +1,7 @@
 """Test the Whirlpool Sensor domain."""
 
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 from freezegun.api import FrozenDateTimeFactory
 import pytest
@@ -437,6 +438,28 @@ async def test_oven_target_temperature_sensor_deprecated(
     assert state is not None
     assert state.state == "200"
     assert (DOMAIN, DEPRECATED_TARGET_TEMP_ISSUE_ID) in issue_registry.issues
+
+
+async def test_oven_target_temperature_sensor_issue_waits_for_replacement(
+    hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
+    issue_registry: ir.IssueRegistry,
+) -> None:
+    """Test no issue is created while the replacement number is not registered."""
+    entity_registry.async_get_or_create(
+        Platform.SENSOR,
+        DOMAIN,
+        DEPRECATED_TARGET_TEMP_UNIQUE_ID,
+        suggested_object_id="single_cavity_oven_target_temperature",
+    )
+
+    with patch("homeassistant.components.whirlpool.PLATFORMS", [Platform.SENSOR]):
+        await init_integration(hass)
+
+    # The deprecated sensor is still set up, but the issue is not created yet,
+    # so that it never references a replacement entity id that does not exist.
+    assert hass.states.get("sensor.single_cavity_oven_target_temperature") is not None
+    assert (DOMAIN, DEPRECATED_TARGET_TEMP_ISSUE_ID) not in issue_registry.issues
 
 
 async def test_oven_target_temperature_sensor_removed_when_disabled(
