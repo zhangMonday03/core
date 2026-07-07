@@ -35,6 +35,11 @@ def deprecate_entity(
     automations or scripts they are listed in the issue. The entity is removed
     once the user disables it and nothing references it anymore. New
     installations never create the entity.
+
+    The issue is only created once the replacement entity is registered, so
+    that it always points at the replacement's actual entity id; since this
+    runs on every setup, a skipped issue is created on the next reload at the
+    latest.
     """
     entity_id = entity_registry.async_get_entity_id(
         platform_domain, DOMAIN, entity_unique_id
@@ -55,18 +60,19 @@ def deprecate_entity(
         async_delete_issue(hass, DOMAIN, issue_id)
         return False
 
+    replacement_entity_id = entity_registry.async_get_entity_id(
+        replacement_platform_domain, DOMAIN, replacement_entity_unique_id
+    )
+    if replacement_entity_id is None:
+        # The replacement is not registered yet (platforms are set up
+        # concurrently). Do not guess an id — the user may have renamed the
+        # deprecated entity — and let the next setup create the issue instead.
+        return True
+
     placeholders = {
         "entity_id": entity_id,
         "entity_name": entity_entry.name or entity_entry.original_name or entity_id,
-        "replacement_entity_id": (
-            entity_registry.async_get_entity_id(
-                replacement_platform_domain, DOMAIN, replacement_entity_unique_id
-            )
-            # The replacement may not be registered yet on the first setup
-            # after the upgrade. It shares this entity's object_id (same
-            # device and name), so derive a valid id from the deprecated one.
-            or f"{replacement_platform_domain}.{entity_id.split('.', 1)[1]}"
-        ),
+        "replacement_entity_id": replacement_entity_id,
     }
     if items:
         translation_key = f"{translation_key}_scripts"
