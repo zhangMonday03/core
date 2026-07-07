@@ -277,8 +277,6 @@ def _build_oven_cavity_sensors(
             entity_unique_id=f"{oven.said}-oven_target_temperature{suffix}",
             issue_id=f"deprecated_oven_target_temperature_{oven.said}{suffix}",
             translation_key="deprecated_oven_target_temperature",
-            replacement_platform_domain=Platform.NUMBER,
-            replacement_entity_unique_id=f"{oven.said}-target_temperature{suffix}",
         ):
             continue
         sensors.append(WhirlpoolOvenCavitySensor(oven, cavity, description))
