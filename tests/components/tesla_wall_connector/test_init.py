@@ -13,7 +13,7 @@ from homeassistant.components.tesla_wall_connector.const import (
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
-import homeassistant.helpers.device_registry as dr
+from homeassistant.helpers import device_registry as dr
 
 from .conftest import (
     create_wall_connector_entry,
