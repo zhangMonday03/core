@@ -7,6 +7,7 @@ from typing import Any, override
 
 import librouteros
 from librouteros.login import plain as login_plain, token as login_token
+from yarl import URL
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -17,6 +18,7 @@ from homeassistant.const import (
     CONF_VERIFY_SSL,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
@@ -30,6 +32,7 @@ from .const import (
     DEFAULT_DETECTION_TIME,
     DHCP,
     DOMAIN,
+    HEALTH,
     IDENTITY,
     INFO,
     IS_CAPSMAN,
@@ -38,6 +41,7 @@ from .const import (
     IS_WIRELESS,
     MIKROTIK_SERVICES,
     NAME,
+    SYSTEM,
     WIFI,
     WIFIWAVE2,
     WIRELESS,
@@ -72,6 +76,7 @@ class MikrotikData:
         self.model: str = ""
         self.firmware: str = ""
         self.serial_number: str = ""
+        self.sensors: dict[str, Any] = {}
 
     @staticmethod
     def load_mac(devices: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -163,6 +168,13 @@ class MikrotikData:
 
             # get new hub firmware version if updated
             self.firmware = self.get_info(ATTR_FIRMWARE)
+
+            self.sensors[HEALTH] = (
+                self.command(MIKROTIK_SERVICES[HEALTH], suppress_errors=True) or []
+            )
+            self.sensors[SYSTEM] = (
+                self.command(MIKROTIK_SERVICES[SYSTEM], suppress_errors=True) or []
+            )
 
         if not device_list:
             return
@@ -291,6 +303,19 @@ class MikrotikDataUpdateCoordinator(DataUpdateCoordinator[None]):
     def api(self) -> MikrotikData:
         """Represent Mikrotik data object."""
         return self._mk_data
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device information."""
+        return DeviceInfo(
+            configuration_url=URL.build(scheme="http", host=self.host),
+            identifiers={(DOMAIN, self.serial_num)},
+            name=self.hostname,
+            manufacturer="Mikrotik",
+            model=self.model,
+            sw_version=self.firmware,
+            serial_number=self.serial_num,
+        )
 
     @override
     async def _async_update_data(self) -> None:
