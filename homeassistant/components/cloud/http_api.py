@@ -58,6 +58,8 @@ from .const import (
     PREF_ENABLE_ALEXA,
     PREF_ENABLE_CLOUD_ICE_SERVERS,
     PREF_ENABLE_GOOGLE,
+    PREF_ENTITY_ALIASES,
+    PREF_ENTITY_NAME,
     PREF_GOOGLE_REPORT_STATE,
     PREF_GOOGLE_SECURE_DEVICES_PIN,
     PREF_REMOTE_ALLOW_REMOTE_ENABLE,
@@ -1068,6 +1070,8 @@ async def google_assistant_get(
         "traits": [trait.name for trait in entity.traits()],
         "might_2fa": entity.might_2fa_traits(),
         PREF_DISABLE_2FA: assistant_options.get(PREF_DISABLE_2FA),
+        PREF_ENTITY_NAME: assistant_options.get(PREF_ENTITY_NAME),
+        PREF_ENTITY_ALIASES: assistant_options.get(PREF_ENTITY_ALIASES),
     }
 
     connection.send_result(msg["id"], result)
@@ -1087,15 +1091,19 @@ async def google_assistant_list(
     cloud = hass.data[DATA_CLOUD]
     gconf = await cloud.client.get_google_config()
     entities = google_helpers.async_get_entities(hass, gconf)
+    settings = exposed_entities.async_get_assistant_settings(hass, CLOUD_GOOGLE)
 
-    result = [
-        {
-            "entity_id": entity.entity_id,
-            "traits": [trait.name for trait in entity.traits()],
-            "might_2fa": entity.might_2fa_traits(),
-        }
-        for entity in entities
-    ]
+    result = []
+    for entity in entities:
+        assistant_options = settings.get(entity.entity_id, {})
+        result.append(
+            {
+                "entity_id": entity.entity_id,
+                "traits": [trait.name for trait in entity.traits()],
+                "might_2fa": entity.might_2fa_traits(),
+                PREF_ENTITY_ALIASES: assistant_options.get(PREF_ENTITY_ALIASES),
+            }
+        )
 
     connection.send_result(msg["id"], result)
 
@@ -1107,6 +1115,8 @@ async def google_assistant_list(
         "type": "cloud/google_assistant/entities/update",
         "entity_id": str,
         vol.Optional(PREF_DISABLE_2FA): bool,
+        vol.Optional(PREF_ENTITY_NAME): vol.Any(str, None),
+        vol.Optional(PREF_ENTITY_ALIASES): [str],
     }
 )
 @websocket_api.async_response
@@ -1124,13 +1134,15 @@ async def google_assistant_update(
         settings = exposed_entities.async_get_entity_settings(hass, entity_id)
         assistant_options = settings[CLOUD_GOOGLE]
 
-    disable_2fa = msg[PREF_DISABLE_2FA]
-    if assistant_options.get(PREF_DISABLE_2FA) == disable_2fa:
-        return
-
-    exposed_entities.async_set_assistant_option(
-        hass, CLOUD_GOOGLE, entity_id, PREF_DISABLE_2FA, disable_2fa
-    )
+    for pref in (PREF_DISABLE_2FA, PREF_ENTITY_NAME, PREF_ENTITY_ALIASES):
+        if pref not in msg:
+            continue
+        value = msg[pref]
+        if assistant_options.get(pref) == value:
+            continue
+        exposed_entities.async_set_assistant_option(
+            hass, CLOUD_GOOGLE, entity_id, pref, value
+        )
     connection.send_result(msg["id"])
 
 
