@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from ccm15 import CCM15DeviceState, CCM15SlaveDevice, TriState
 from freezegun.api import FrozenDateTimeFactory
+import httpx
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
@@ -31,6 +32,7 @@ from homeassistant.const import (
     CONF_HOST,
     CONF_PORT,
     SERVICE_TURN_OFF,
+    STATE_UNAVAILABLE,
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant
@@ -97,7 +99,11 @@ async def test_climate_state(
         await hass.services.async_call(
             CLIMATE_DOMAIN,
             SERVICE_SET_TEMPERATURE,
-            {ATTR_ENTITY_ID: ["climate.midea_0"], ATTR_TEMPERATURE: 25},
+            {
+                ATTR_ENTITY_ID: ["climate.midea_0"],
+                ATTR_TEMPERATURE: 25,
+                ATTR_HVAC_MODE: HVACMode.COOL,
+            },
             blocking=True,
         )
         await hass.async_block_till_done()
@@ -142,6 +148,85 @@ async def test_climate_state(
 
     assert hass.states.get("climate.midea_0") == snapshot
     assert hass.states.get("climate.midea_1") == snapshot
+
+
+@pytest.mark.usefixtures("ccm15_device")
+async def test_climate_unavailable_on_failed_update(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Test the entity becomes unavailable when the controller cannot be reached."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="1.1.1.1",
+        data={
+            CONF_HOST: "1.1.1.1",
+            CONF_PORT: 80,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("climate.midea_0")
+    assert state is not None
+    assert state.state != STATE_UNAVAILABLE
+
+    with patch(
+        "homeassistant.components.ccm15.coordinator.CCM15Device.get_status_async",
+        side_effect=httpx.RequestError(
+            "Connection failed",
+            request=httpx.Request("GET", "http://1.1.1.1/status.xml"),
+        ),
+    ):
+        freezer.tick(timedelta(minutes=15))
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done()
+
+    state = hass.states.get("climate.midea_0")
+    assert state is not None
+    assert state.state == STATE_UNAVAILABLE
+
+
+@pytest.mark.usefixtures("ccm15_device")
+async def test_dynamic_devices_added(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A slot that appears in a later poll gets a new entity."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="1.1.1.1",
+        data={
+            CONF_HOST: "1.1.1.1",
+            CONF_PORT: 80,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.states.get("climate.midea_0") is not None
+    assert hass.states.get("climate.midea_2") is None
+
+    device_state = CCM15DeviceState(
+        devices={
+            0: CCM15SlaveDevice(bytes.fromhex("000000b0b8001b")),
+            1: CCM15SlaveDevice(bytes.fromhex("00000041c0001a")),
+            2: CCM15SlaveDevice(bytes.fromhex("00000041c0001a")),
+        }
+    )
+    with patch(
+        "homeassistant.components.ccm15.coordinator.CCM15Device.get_status_async",
+        return_value=device_state,
+    ):
+        freezer.tick(timedelta(minutes=15))
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done()
+
+    assert hass.states.get("climate.midea_2") is not None
 
 
 async def test_climate_fahrenheit_unit(hass: HomeAssistant) -> None:
