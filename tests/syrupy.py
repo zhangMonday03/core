@@ -158,21 +158,26 @@ class HomeAssistantSnapshotSerializer(AmberDataSerializer):
         cls, data: dr.DeviceEntry
     ) -> SerializableData:
         """Prepare a Home Assistant device registry entry for serialization."""
+        # device_entry_as_dict excludes internal attributes (caches, transient move
+        # state, and the composite-device migration bookkeeping)
         serialized = DeviceRegistryEntrySnapshot(
-            attrs.asdict(data)
+            dr.device_entry_as_dict(data, retain_collection_types=True)
             | {
-                "config_entries": ANY,
-                "config_entries_subentries": ANY,
                 "id": ANY,
             }
         )
         if serialized["via_device_id"] is not None:
             serialized["via_device_id"] = ANY
-        if serialized["primary_config_entry"] is not None:
-            serialized["primary_config_entry"] = ANY
-        serialized.pop("_cache")
-        # This can be removed when suggested_area is removed from DeviceEntry
-        serialized.pop("_suggested_area")
+
+        # Remove single config entry and subentry ids to not break snapshots
+        serialized.pop("config_entry_id")
+        serialized.pop("config_subentry_id")
+
+        # Set removed composite device attributes to ANY to not break snapshots
+        serialized["config_entries"] = ANY
+        serialized["config_entries_subentries"] = ANY
+        serialized["primary_config_entry"] = ANY
+
         return cls._remove_created_and_modified_at(serialized)
 
     @classmethod
