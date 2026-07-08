@@ -422,6 +422,7 @@ FLOWS = {
         "liebherr",
         "lifx",
         "linkplay",
+        "linksys_smart",
         "litejet",
         "litterrobot",
         "livisi",
