@@ -21,7 +21,12 @@ from tesla_fleet_api.exceptions import (
     VehicleOffline,
 )
 
-from homeassistant.components.tesla_fleet.const import DOMAIN, SCOPES
+from homeassistant.components.tesla_fleet import async_remove_entry
+from homeassistant.components.tesla_fleet.const import (
+    DOMAIN,
+    ENERGY_HISTORY_FIELDS,
+    SCOPES,
+)
 from homeassistant.components.tesla_fleet.coordinator import (
     ENERGY_HISTORY_INTERVAL,
     ENERGY_INTERVAL,
@@ -79,6 +84,64 @@ async def test_load_unload(
     await hass.async_block_till_done()
     assert normal_config_entry.state is ConfigEntryState.NOT_LOADED
     assert not hasattr(normal_config_entry, "runtime_data")
+
+
+async def test_remove_entry_clears_statistics(
+    hass: HomeAssistant,
+    normal_config_entry: MockConfigEntry,
+) -> None:
+    """Test remove entry clears external statistics for energy sites only."""
+    await setup_platform(hass, normal_config_entry)
+    assert normal_config_entry.state is ConfigEntryState.LOADED
+
+    # Only energy sites have all-numeric identifiers, but a wall connector's
+    # serial_number can also be all-numeric.
+    device_registry = dr.async_get(hass)
+    devices = dr.async_entries_for_config_entry(
+        device_registry, normal_config_entry.entry_id
+    )
+    energy_site_ids = {
+        identifier
+        for device in devices
+        for domain, identifier in device.identifiers
+        if domain == DOMAIN and identifier.isdigit()
+    }
+    wall_connector_serials = {
+        device.serial_number
+        for device in devices
+        if device.serial_number
+        and device.serial_number.isdigit()
+        and (DOMAIN, device.serial_number) not in device.identifiers
+    }
+    # The fixtures must include both, otherwise the bug can't be detected
+    assert energy_site_ids
+    assert wall_connector_serials
+
+    # Unload first (like real removal flow), which deletes runtime_data
+    await hass.config_entries.async_unload(normal_config_entry.entry_id)
+    assert not hasattr(normal_config_entry, "runtime_data")
+
+    with patch(
+        "homeassistant.components.tesla_fleet.get_recorder_instance"
+    ) as mock_get_recorder:
+        await async_remove_entry(hass, normal_config_entry)
+
+    mock_get_recorder.return_value.async_clear_statistics.assert_called_once()
+    cleared_ids = set(
+        mock_get_recorder.return_value.async_clear_statistics.call_args.args[0]
+    )
+    expected_ids = {
+        f"tesla_fleet:{site_id}_{field}"
+        for site_id in energy_site_ids
+        for field in ENERGY_HISTORY_FIELDS
+    }
+    assert cleared_ids == expected_ids
+    # Wall connector serials must never be turned into statistic IDs.
+    assert not any(
+        cleared_id.startswith(f"tesla_fleet:{serial}_")
+        for serial in wall_connector_serials
+        for cleared_id in cleared_ids
+    )
 
 
 @pytest.mark.parametrize(("side_effect", "state"), SETUP_ERRORS)
@@ -802,6 +865,9 @@ async def test_energy_history_refresh_ratelimited(
 
     await setup_platform(hass, normal_config_entry)
 
+    # No call during setup since async_config_entry_first_refresh is not called
+    assert mock_energy_history.call_count == 0
+
     mock_energy_history.side_effect = RateLimited(
         {"after": int(ENERGY_HISTORY_INTERVAL.total_seconds() + 10)}
     )
@@ -823,6 +889,28 @@ async def test_energy_history_refresh_ratelimited(
     await hass.async_block_till_done()
 
     assert mock_energy_history.call_count == 2
+
+    mock_energy_history.side_effect = None
+
+    # Still in backoff from the second rate limited response
+    freezer.tick(ENERGY_HISTORY_INTERVAL)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert mock_energy_history.call_count == 2
+
+    freezer.tick(ENERGY_HISTORY_INTERVAL)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert mock_energy_history.call_count == 3
+
+    # A successful refresh resets the backoff to the normal interval
+    freezer.tick(ENERGY_HISTORY_INTERVAL)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert mock_energy_history.call_count == 4
 
 
 async def test_init_region_issue(
