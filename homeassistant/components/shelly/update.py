@@ -7,6 +7,7 @@ from typing import Any, Final, cast, override
 
 from aioshelly.const import RPC_GENERATIONS
 from aioshelly.exceptions import DeviceConnectionError, InvalidAuthError, RpcCallError
+from aioshelly.rpc_device.device import RpcDevice
 from awesomeversion import AwesomeVersion, AwesomeVersionStrategy
 
 from homeassistant.components.update import (
@@ -53,7 +54,12 @@ class RpcUpdateDescription(RpcEntityDescription, UpdateEntityDescription):
     """Class to describe a RPC update."""
 
     latest_version: Callable[[dict], Any]
+    installed_version: Callable[[dict], Any] | None = None
     beta: bool
+    method: Callable[[RpcDevice, bool], Any] = lambda device, beta: (
+        device.trigger_ota_update(beta)
+    )
+    release_url: Callable[[int, str, bool], str | None] | None = get_release_url
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -102,6 +108,18 @@ RPC_UPDATES: Final = {
         device_class=UpdateDeviceClass.FIRMWARE,
         entity_category=EntityCategory.CONFIG,
         entity_registry_enabled_default=False,
+    ),
+    "loraupdate": RpcUpdateDescription(
+        key="lora",
+        sub_key="available_updates",
+        translation_key="lora_firmware",
+        latest_version=lambda status: status.get("stable", {"version": ""})["version"],
+        installed_version=lambda status: status.get("fw_version"),
+        beta=False,
+        method=lambda device, _: device.trigger_add_on_ota_update(),
+        release_url=None,
+        device_class=UpdateDeviceClass.FIRMWARE,
+        entity_category=EntityCategory.CONFIG,
     ),
 }
 
@@ -273,9 +291,10 @@ class RpcUpdateEntity(ShellyRpcAttributeEntity, UpdateEntity):
         super().__init__(coordinator, key, attribute, description)
         self._ota_in_progress = False
         self._ota_progress_percentage: int | None = None
-        self._attr_release_url = get_release_url(
-            coordinator.device.gen, coordinator.model, description.beta
-        )
+        if description.release_url is not None:
+            self._attr_release_url = description.release_url(
+                coordinator.device.gen, coordinator.model, description.beta
+            )
 
     @override
     async def async_added_to_hass(self) -> None:
@@ -303,6 +322,12 @@ class RpcUpdateEntity(ShellyRpcAttributeEntity, UpdateEntity):
     @override
     def installed_version(self) -> str | None:
         """Version currently in use."""
+        if self.entity_description.installed_version is not None:
+            return cast(
+                str,
+                self.entity_description.installed_version(self.status),
+            )
+
         return cast(str, self.coordinator.device.shelly["ver"])
 
     @property
@@ -347,7 +372,7 @@ class RpcUpdateEntity(ShellyRpcAttributeEntity, UpdateEntity):
             new_version,
         )
         try:
-            await self.coordinator.device.trigger_ota_update(beta=beta)
+            await self.entity_description.method(self.coordinator.device, beta)
         except DeviceConnectionError as err:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
