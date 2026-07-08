@@ -1,8 +1,8 @@
 """Platform for cover integration."""
 
-from typing import Any, override
+from typing import TYPE_CHECKING, Any, override
 
-from boschshcpy import SHCShutterControl
+from boschshcpy import SHCShutterControl, ShutterControlService
 
 from homeassistant.components.cover import (
     ATTR_POSITION,
@@ -25,17 +25,21 @@ async def async_setup_entry(
     """Set up the SHC cover platform."""
     session = config_entry.runtime_data
 
+    shc_info = session.information
+    if TYPE_CHECKING:
+        assert shc_info is not None and shc_info.unique_id is not None
+
     async_add_entities(
         ShutterControlCover(
             device=cover,
-            parent_id=session.information.unique_id,
+            parent_id=shc_info.unique_id,
             entry_id=config_entry.entry_id,
         )
         for cover in session.device_helper.shutter_controls
     )
 
 
-class ShutterControlCover(SHCEntity, CoverEntity):
+class ShutterControlCover(SHCEntity[SHCShutterControl], CoverEntity):
     """Representation of a SHC shutter control device."""
 
     _attr_name = None
@@ -68,19 +72,13 @@ class ShutterControlCover(SHCEntity, CoverEntity):
     @override
     def is_opening(self) -> bool:
         """Return if the cover is opening or not."""
-        return (
-            self._device.operation_state
-            == SHCShutterControl.ShutterControlService.State.OPENING
-        )
+        return self._device.operation_state is ShutterControlService.State.OPENING
 
     @property
     @override
     def is_closing(self) -> bool:
         """Return if the cover is closing or not."""
-        return (
-            self._device.operation_state
-            == SHCShutterControl.ShutterControlService.State.CLOSING
-        )
+        return self._device.operation_state is ShutterControlService.State.CLOSING
 
     @override
     def open_cover(self, **kwargs: Any) -> None:
