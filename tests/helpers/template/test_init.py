@@ -1,6 +1,7 @@
 """Test Home Assistant template helper methods."""
 
 from datetime import datetime
+from enum import Enum, IntEnum, IntFlag, StrEnum
 import gc
 from unittest.mock import patch
 
@@ -933,6 +934,152 @@ async def test_parse_result(hass: HomeAssistant) -> None:
         ("set()", set()),
     ):
         assert render(hass, tpl) == result
+
+
+class _Color(StrEnum):
+    RED = "red"
+
+
+class _Level(IntEnum):
+    LOW = 1
+
+
+class _LegacyStr(str, Enum):  # noqa: UP042  # legacy str-mixin under test
+    FOO = "foo"
+
+
+class _Plain(Enum):
+    A = "aval"
+
+
+class _Flags(IntFlag):
+    X = 1
+    Y = 2
+
+
+_ENUM_VARS = {
+    "color": _Color.RED,
+    "level": _Level.LOW,
+    "legacy": _LegacyStr.FOO,
+    "plain": _Plain.A,
+    "flag_single": _Flags.X,
+    # IntFlag union, like supported_features (e.g. WeatherEntityFeature); value 3.
+    "flag": _Flags.X | _Flags.Y,
+    # Jinja has no set-literal syntax, so a set can only reach output as a var.
+    "color_set": {_Color.RED},
+    "level_set": {_Level.LOW},
+}
+
+
+@pytest.mark.parametrize(
+    ("template_string", "expected"),
+    [
+        pytest.param("{{ {'k': color} }}", {"k": "red"}, id="strenum-dict-value"),
+        pytest.param("{{ {color: 1} }}", {"red": 1}, id="strenum-dict-key"),
+        pytest.param("{{ [color] }}", ["red"], id="strenum-list"),
+        pytest.param("{{ (color,) }}", ("red",), id="strenum-tuple"),
+        pytest.param("{{ color_set }}", {"red"}, id="strenum-set"),
+        pytest.param("{{ {'k': level} }}", {"k": 1}, id="intenum-dict-value"),
+        pytest.param("{{ {level: 'x'} }}", {1: "x"}, id="intenum-dict-key"),
+        pytest.param("{{ [level] }}", [1], id="intenum-list"),
+        pytest.param("{{ level_set }}", {1}, id="intenum-set"),
+        pytest.param("{{ {'k': flag_single} }}", {"k": 1}, id="intflag-single"),
+        pytest.param("{{ {'k': flag} }}", {"k": 3}, id="intflag-union-dict-value"),
+        pytest.param("{{ [flag] }}", [3], id="intflag-union-list"),
+        pytest.param(
+            "{{ {color: {level: [color, level]}} }}",
+            {"red": {1: ["red", 1]}},
+            id="deeply-nested-mixed-keys-and-values",
+        ),
+        pytest.param(
+            "{{ [{'a': (color, [level])}] }}",
+            [{"a": ("red", [1])}],
+            id="nested-mixed-containers",
+        ),
+    ],
+)
+async def test_parse_result_resolves_enums_in_containers(
+    hass: HomeAssistant, template_string: str, expected: object
+) -> None:
+    """ReprEnum members in containers resolve to their value and round-trip."""
+    assert render(hass, template_string, _ENUM_VARS) == expected
+
+
+@pytest.mark.parametrize(
+    "variable",
+    ["legacy", "plain"],
+)
+async def test_parse_result_unsupported_enums_fall_back_to_string(
+    hass: HomeAssistant, variable: str
+) -> None:
+    """Non-ReprEnum members (plain Enum, legacy mixins) are not resolved."""
+    result = render(hass, "{{ {'k': " + variable + "} }}", _ENUM_VARS)
+    assert isinstance(result, str)
+
+
+@pytest.mark.parametrize(
+    ("template_string", "expected"),
+    [
+        pytest.param("{{ color }}", "red", id="bare-strenum"),
+        pytest.param("{{ level }}", 1, id="bare-intenum"),
+    ],
+)
+async def test_parse_result_bare_enum_unchanged(
+    hass: HomeAssistant, template_string: str, expected: object
+) -> None:
+    """A bare Enum member renders via its default str() and is not coerced."""
+    assert render(hass, template_string, _ENUM_VARS) == expected
+
+
+async def test_parse_result_resolves_enums_in_state_attributes(
+    hass: HomeAssistant,
+) -> None:
+    """State attributes (a ReadOnlyDict) with enum keys/values resolve when rendered.
+
+    Mirrors the reported case: a StrEnum key plus an IntFlag supported_features
+    value (like WeatherEntityFeature) would otherwise make the attributes render
+    as an unparsable string.
+    """
+    hass.states.async_set(
+        "light.test",
+        "on",
+        {_Color.RED: "rainbow", "supported_features": _Flags.X | _Flags.Y},
+    )
+    assert render(hass, "{{ states.light.test.attributes }}") == {
+        "red": "rainbow",
+        "supported_features": 3,
+    }
+
+
+@pytest.mark.parametrize(
+    ("template_string", "expected_value"),
+    [
+        pytest.param(
+            "{{ dict(foo=\"{'a': 1}\") }}", "{'a': 1}", id="python-dict-literal"
+        ),
+        pytest.param("{{ dict(foo='{\"a\": 1}') }}", '{"a": 1}', id="json-object"),
+        pytest.param("{{ dict(foo='[1, 2, 3]') }}", "[1, 2, 3]", id="json-array"),
+        pytest.param("{{ dict(foo='(1, 2)') }}", "(1, 2)", id="tuple-literal"),
+        pytest.param("{{ dict(foo='{1, 2}') }}", "{1, 2}", id="set-literal"),
+        pytest.param("{{ dict(foo='123') }}", "123", id="int-like"),
+        pytest.param("{{ dict(foo='1.5') }}", "1.5", id="float-like"),
+        pytest.param("{{ dict(foo='True') }}", "True", id="bool-like"),
+        pytest.param("{{ dict(foo='null') }}", "null", id="json-null"),
+    ],
+)
+async def test_parse_result_dict_keeps_stringified_value(
+    hass: HomeAssistant, template_string: str, expected_value: str
+) -> None:
+    """dict() keeps a value that looks like a literal as a string, not re-parsed.
+
+    Common workaround (JSON payload templates, MQTT topics) to stop the template
+    parser from resolving a string value. The result must be a dict whose value
+    is the untouched string, even when that string is itself a valid literal.
+    """
+    result = render(hass, template_string)
+    assert isinstance(result, dict)
+    assert result == {"foo": expected_value}
+    assert isinstance(result["foo"], str)
 
 
 @pytest.mark.parametrize(
