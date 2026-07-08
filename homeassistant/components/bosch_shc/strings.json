@@ -72,5 +72,13 @@
         "name": "Routing"
       }
     }
+  },
+  "exceptions": {
+    "set_temperature_while_boost": {
+      "message": "Cannot set temperature on {name} while it is in boost mode."
+    },
+    "set_temperature_while_off": {
+      "message": "Cannot set temperature on {name} while it is off."
+    }
   }
 }
