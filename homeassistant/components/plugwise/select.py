@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import (
+    LOCATION,
     SELECT_DHW_MODE,
     SELECT_GATEWAY_MODE,
     SELECT_REGULATION_MODE,
@@ -83,7 +84,7 @@ async def async_setup_entry(
             PlugwiseSelectEntity(coordinator, device_id, description)
             for device_id in coordinator.new_devices
             for description in SELECT_TYPES
-            if coordinator.data[device_id].get(description.options_key)
+            if coordinator.data[device_id].get(description.key) is not None
         )
 
     _add_entities()
@@ -106,9 +107,12 @@ class PlugwiseSelectEntity(PlugwiseEntity, SelectEntity):
         self._attr_unique_id = f"{device_id}-{entity_description.key}"
         self.entity_description = entity_description
 
-        self._location = device_id
-        if (location := self.device.get("location")) is not None:
-            self._location = location
+        self._device_or_location = device_id
+        if (
+            self.entity_description.key in (SELECT_SCHEDULE, SELECT_ZONE_PROFILE)
+            and (location := self.device.get(LOCATION)) is not None
+        ):
+            self._device_or_location = location
 
     @property
     @override
@@ -127,8 +131,10 @@ class PlugwiseSelectEntity(PlugwiseEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         """Change to the selected entity option.
 
-        self._location and STATE_ON are required for the thermostat-schedule select.
+        Appliance ID (= device_id) is required for the dhw_mode select
+        Location ID is required for the thermostat-schedule and zone_profile selects.
+        STATE_ON is required for the thermostat-schedule select.
         """
         await self.coordinator.api.set_select(
-            self.entity_description.key, self._location, option, STATE_ON
+            self.entity_description.key, self._device_or_location, option, STATE_ON
         )
