@@ -36,6 +36,7 @@ from homeassistant.util.async_ import create_eager_task
 from .bridge import SamsungTVWSBridge
 from .const import CONF_SSDP_RENDERING_CONTROL_LOCATION, DOMAIN, LOGGER
 from .coordinator import SamsungTVConfigEntry, SamsungTVDataUpdateCoordinator
+from .decorators import cmd
 from .entity import SamsungTVEntity
 
 SOURCES = {"TV": "KEY_TV", "HDMI": "KEY_HDMI"}
@@ -304,6 +305,7 @@ class SamsungTVDevice(SamsungTVEntity, MediaPlayerEntity):
         await self._bridge.async_send_keys(keys)
 
     @override
+    @cmd
     async def async_set_volume_level(self, volume: float) -> None:
         """Set volume level on the media player."""
         if (dmr_device := self._dmr_device) is None:
@@ -320,21 +322,25 @@ class SamsungTVDevice(SamsungTVEntity, MediaPlayerEntity):
             ) from err
 
     @override
+    @cmd
     async def async_volume_up(self) -> None:
         """Volume up the media player."""
         await self._async_send_keys(["KEY_VOLUP"])
 
     @override
+    @cmd
     async def async_volume_down(self) -> None:
         """Volume down media player."""
         await self._async_send_keys(["KEY_VOLDOWN"])
 
     @override
+    @cmd
     async def async_mute_volume(self, mute: bool) -> None:
         """Send mute command."""
         await self._async_send_keys(["KEY_MUTE"])
 
     @override
+    @cmd
     async def async_media_play_pause(self) -> None:
         """Simulate play pause media player."""
         if self._playing:
@@ -343,28 +349,33 @@ class SamsungTVDevice(SamsungTVEntity, MediaPlayerEntity):
             await self.async_media_play()
 
     @override
+    @cmd
     async def async_media_play(self) -> None:
         """Send play command."""
         self._playing = True
         await self._async_send_keys(["KEY_PLAY"])
 
     @override
+    @cmd
     async def async_media_pause(self) -> None:
         """Send media pause command to media player."""
         self._playing = False
         await self._async_send_keys(["KEY_PAUSE"])
 
     @override
+    @cmd
     async def async_media_next_track(self) -> None:
         """Send next track command."""
         await self._async_send_keys(["KEY_CHUP"])
 
     @override
+    @cmd
     async def async_media_previous_track(self) -> None:
         """Send the previous track command."""
         await self._async_send_keys(["KEY_CHDOWN"])
 
     @override
+    @cmd
     async def async_play_media(
         self, media_type: MediaType | str, media_id: str, **kwargs: Any
     ) -> None:
@@ -392,6 +403,7 @@ class SamsungTVDevice(SamsungTVEntity, MediaPlayerEntity):
         )
 
     @override
+    @cmd
     async def async_select_source(self, source: str) -> None:
         """Select input source."""
         if self._app_list and source in self._app_list:
