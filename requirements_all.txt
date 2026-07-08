@@ -2172,6 +2172,9 @@ pyeverlights==0.1.0
 # homeassistant.components.evil_genius_labs
 pyevilgenius==2.0.0
 
+# homeassistant.components.evolviot
+pyevolviot==0.1.0
+
 # homeassistant.components.ezviz
 pyezvizapi==1.0.0.7
 
@@ -2865,6 +2868,9 @@ qingping-ble==1.1.5
 
 # homeassistant.components.qnap
 qnapstats==0.4.0
+
+# homeassistant.components.evolviot
+qrcode[pil]==8.2
 
 # homeassistant.components.quantum_gateway
 quantum-gateway==0.0.8
