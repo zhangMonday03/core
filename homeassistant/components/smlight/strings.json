@@ -138,7 +138,8 @@
         "state": {
           "coordinator": "Coordinator",
           "router": "Router",
-          "thread": "Thread"
+          "thread": "Thread",
+          "thread_border_router": "Thread border router"
         }
       }
     },
