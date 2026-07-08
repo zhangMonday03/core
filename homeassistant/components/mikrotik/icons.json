@@ -1,0 +1,9 @@
+{
+  "entity": {
+    "button": {
+      "shutdown": {
+        "default": "mdi:power"
+      }
+    }
+  }
+}

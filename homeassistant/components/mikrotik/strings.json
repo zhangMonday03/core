@@ -30,6 +30,13 @@
       }
     }
   },
+  "entity": {
+    "button": {
+      "shutdown": {
+        "name": "Shutdown"
+      }
+    }
+  },
   "exceptions": {
     "cannot_connect": {
       "message": "Error connecting: {error}"
