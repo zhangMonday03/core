@@ -17,10 +17,16 @@ from homeassistant.components.alarm_control_panel import (
 )
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import PlatformNotReady
 from homeassistant.helpers import config_validation as cv, entity_platform
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity_platform import (
+    AddConfigEntryEntitiesCallback,
+    AddEntitiesCallback,
+)
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
+
+from . import NX584ConfigEntry, async_import_yaml_config
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,32 +48,8 @@ PLATFORM_SCHEMA = ALARM_CONTROL_PANEL_PLATFORM_SCHEMA.extend(
 )
 
 
-async def async_setup_platform(
-    hass: HomeAssistant,
-    config: ConfigType,
-    async_add_entities: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None,
-) -> None:
-    """Set up the NX584 platform."""
-    name: str = config[CONF_NAME]
-    host: str = config[CONF_HOST]
-    port: int = config[CONF_PORT]
-
-    url = f"http://{host}:{port}"
-
-    try:
-        alarm_client = client.Client(url)
-        await hass.async_add_executor_job(alarm_client.list_zones)
-    except requests.exceptions.ConnectionError as ex:
-        _LOGGER.error(
-            "Unable to connect to %(host)s: %(reason)s",
-            {"host": url, "reason": ex},
-        )
-        raise PlatformNotReady from ex
-
-    entity = NX584Alarm(name, alarm_client, url)
-    async_add_entities([entity])
-
+def _async_register_services() -> None:
+    """Register the bypass/unbypass zone entity services."""
     platform = entity_platform.async_get_current_platform()
 
     platform.async_register_entity_service(
@@ -83,6 +65,30 @@ async def async_setup_platform(
     )
 
 
+async def async_setup_platform(
+    hass: HomeAssistant,
+    config: ConfigType,
+    async_add_entities: AddEntitiesCallback,
+    discovery_info: DiscoveryInfoType | None = None,
+) -> None:
+    """Set up the NX584 platform from YAML, importing it as a config entry."""
+    await async_import_yaml_config(hass, config)
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: NX584ConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    """Set up the NX584 alarm control panel from a config entry."""
+    data = entry.runtime_data
+
+    entity = NX584Alarm(data.client, data.url, entry.entry_id)
+    async_add_entities([entity])
+
+    _async_register_services()
+
+
 class NX584Alarm(AlarmControlPanelEntity):
     """Representation of a NX584-based alarm panel."""
 
@@ -92,12 +98,15 @@ class NX584Alarm(AlarmControlPanelEntity):
         | AlarmControlPanelEntityFeature.ARM_AWAY
     )
     _attr_code_arm_required = False
+    _attr_has_entity_name = True
+    _attr_name = None
 
-    def __init__(self, name: str, alarm_client: client.Client, url: str) -> None:
+    def __init__(self, alarm_client: client.Client, url: str, entry_id: str) -> None:
         """Init the nx584 alarm panel."""
-        self._attr_name = name
         self._alarm = alarm_client
         self._url = url
+        self._attr_unique_id = entry_id
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry_id)})
 
     def update(self) -> None:
         """Process new events from panel."""
@@ -109,13 +118,14 @@ class NX584Alarm(AlarmControlPanelEntity):
                 "Unable to connect to %(host)s: %(reason)s",
                 {"host": self._url, "reason": ex},
             )
-            self._attr_alarm_state = None
-            zones = []
+            self._attr_available = False
+            return
         except IndexError:
             _LOGGER.error("NX584 reports no partitions")
-            self._attr_alarm_state = None
-            zones = []
+            self._attr_available = False
+            return
 
+        self._attr_available = True
         bypassed = False
         for zone in zones:
             if zone["bypassed"]:
