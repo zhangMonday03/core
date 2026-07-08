@@ -1,0 +1,149 @@
+"""Tests for the Easywave RX11Transceiver gateway wrapper."""
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from homeassistant.components.easywave.transceiver import RX11Transceiver
+from homeassistant.core import HomeAssistant
+
+DEVICE_PATH = "/dev/ttyACM0"
+GATEWAY_PATH = "homeassistant.components.easywave.transceiver.EasywaveGateway"
+
+
+@pytest.fixture
+def mock_gateway() -> MagicMock:
+    """Return a mock EasywaveGateway."""
+    gateway = MagicMock()
+    gateway.is_connected = False
+    gateway.device_path = None
+    gateway.usb_serial_number = None
+    gateway.hw_version = None
+    gateway.fw_version = None
+    gateway.device = None
+    gateway.connect = AsyncMock(return_value=True)
+    gateway.disconnect = AsyncMock()
+    gateway.stop = AsyncMock()
+    gateway.reconnect = AsyncMock(return_value=True)
+    gateway.cancel_pending_receives = AsyncMock()
+    gateway.ew = MagicMock()
+    gateway.ew.get_gateway_serial = AsyncMock(return_value=b"\x01" * 16)
+    gateway.ew.send_command = AsyncMock(return_value=True)
+    gateway.ew.receive_ex = AsyncMock(return_value=None)
+    return gateway
+
+
+@pytest.fixture
+def transceiver(hass: HomeAssistant, mock_gateway: MagicMock) -> RX11Transceiver:
+    """Return an RX11Transceiver with a mocked gateway."""
+    with patch(GATEWAY_PATH, return_value=mock_gateway):
+        return RX11Transceiver(hass, DEVICE_PATH)
+
+
+async def test_connect_delegates_to_gateway(
+    transceiver: RX11Transceiver, mock_gateway: MagicMock
+) -> None:
+    """Connect delegates to the library gateway."""
+    mock_gateway.is_connected = True
+    mock_gateway.device_path = DEVICE_PATH
+
+    assert await transceiver.connect() is True
+    mock_gateway.connect.assert_awaited_once()
+
+
+async def test_disconnect_and_dispose_delegate_to_gateway(
+    transceiver: RX11Transceiver, mock_gateway: MagicMock
+) -> None:
+    """Disconnect and dispose delegate to the library gateway."""
+    await transceiver.disconnect()
+    await transceiver.dispose()
+
+    mock_gateway.disconnect.assert_awaited_once()
+    mock_gateway.stop.assert_awaited_once()
+
+
+async def test_reconnect_delegates_to_gateway(
+    transceiver: RX11Transceiver, mock_gateway: MagicMock
+) -> None:
+    """Reconnect delegates to the library gateway."""
+    assert await transceiver.reconnect() is True
+    mock_gateway.reconnect.assert_awaited_once()
+
+
+async def test_gateway_operations_delegate_to_ew_facade(
+    transceiver: RX11Transceiver, mock_gateway: MagicMock
+) -> None:
+    """EW operations delegate to the library facade."""
+    mock_gateway.is_connected = True
+    mock_device = MagicMock()
+    mock_device.get_available_functions = AsyncMock(
+        return_value={"ping": "Ping device"}
+    )
+    mock_device.get_device_info = AsyncMock(return_value={"device_type": "RX11"})
+    mock_gateway.device = mock_device
+
+    assert await transceiver.get_gateway_serial(0) == b"\x01" * 16
+    assert await transceiver.send_command(b"\x02" * 16, 0) is True
+    assert await transceiver.receive_telegram(timeout=5.0) is None
+    await transceiver.cancel_pending_receives()
+
+    mock_gateway.ew.get_gateway_serial.assert_awaited_once_with(0)
+    mock_gateway.ew.send_command.assert_awaited_once_with(b"\x02" * 16, 0)
+    mock_gateway.ew.receive_ex.assert_awaited_once_with(timeout=5.0)
+    mock_gateway.cancel_pending_receives.assert_awaited_once()
+    assert await transceiver.get_available_functions() == {"ping": "Ping device"}
+    assert await transceiver.get_device_info() == {"device_type": "RX11"}
+
+
+async def test_capability_queries_return_empty_when_disconnected(
+    transceiver: RX11Transceiver,
+) -> None:
+    """Capability helpers return empty results when disconnected."""
+    assert await transceiver.get_available_functions() == {}
+    assert await transceiver.get_device_info() == {}
+
+
+async def test_connected_callback_is_forwarded(
+    hass: HomeAssistant, mock_gateway: MagicMock
+) -> None:
+    """Gateway connect events invoke the registered callback."""
+    callback = MagicMock()
+    with patch(GATEWAY_PATH, return_value=mock_gateway):
+        transceiver = RX11Transceiver(hass, DEVICE_PATH)
+        transceiver.set_connected_callback(callback)
+        transceiver._notify_connected(MagicMock())
+
+    await hass.async_block_till_done()
+    callback.assert_called_once()
+
+
+async def test_disconnect_callback_is_forwarded(
+    hass: HomeAssistant, mock_gateway: MagicMock
+) -> None:
+    """Gateway disconnect events invoke the registered callback."""
+    callback = MagicMock()
+    with patch(GATEWAY_PATH, return_value=mock_gateway):
+        transceiver = RX11Transceiver(hass, DEVICE_PATH)
+        transceiver.set_disconnect_callback(callback)
+        transceiver._notify_disconnect()
+
+    await hass.async_block_till_done()
+    callback.assert_called_once()
+
+
+def test_properties_proxy_gateway_state(mock_gateway: MagicMock) -> None:
+    """Transceiver properties mirror the gateway state."""
+    mock_gateway.is_connected = True
+    mock_gateway.device_path = DEVICE_PATH
+    mock_gateway.usb_serial_number = "12345"
+    mock_gateway.hw_version = "RX11 v1.0"
+    mock_gateway.fw_version = "2.5"
+
+    with patch(GATEWAY_PATH, return_value=mock_gateway):
+        transceiver = RX11Transceiver(MagicMock(), DEVICE_PATH)
+
+    assert transceiver.is_connected is True
+    assert transceiver.device_path == DEVICE_PATH
+    assert transceiver.usb_serial_number == "12345"
+    assert transceiver.hw_version == "RX11 v1.0"
+    assert transceiver.fw_version == "2.5"
