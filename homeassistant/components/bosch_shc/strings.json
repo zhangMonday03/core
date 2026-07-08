@@ -28,6 +28,9 @@
         "data": {
           "host": "[%key:common::config_flow::data::host%]"
         },
+        "data_description": {
+          "host": "[%key:component::bosch_shc::config::step::user::data_description::host%]"
+        },
         "description": "The Bosch SHC integration needs to re-authenticate your account",
         "title": "[%key:common::config_flow::title::reauth%]"
       },
@@ -44,6 +47,29 @@
     }
   },
   "entity": {
+    "button": {
+      "detection_test": {
+        "name": "Detection test"
+      },
+      "detection_test_stop": {
+        "name": "Stop detection test"
+      },
+      "impulse": {
+        "name": "Trigger"
+      },
+      "reset_tamper": {
+        "name": "Reset tamper"
+      },
+      "smoke_test": {
+        "name": "Smoke test"
+      },
+      "walk_test": {
+        "name": "Walk test"
+      },
+      "walk_test_stop": {
+        "name": "Stop walk test"
+      }
+    },
     "sensor": {
       "air_quality": {
         "name": "Air quality"
@@ -71,6 +97,14 @@
       "routing": {
         "name": "Routing"
       }
+    }
+  },
+  "exceptions": {
+    "button_press_failed": {
+      "message": "Failed to press {name}"
+    },
+    "scenario_trigger_failed": {
+      "message": "Failed to trigger scenario {name}"
     }
   }
 }
