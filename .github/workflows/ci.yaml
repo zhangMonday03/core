@@ -504,6 +504,14 @@ jobs:
         if: steps.cache-venv.outputs.cache-hit != 'true'
         run: |
           sudo rm /etc/apt/sources.list.d/microsoft-prod.list
+          [ -f /etc/apt/sources.list ] && sudo sed -i 's/archive.ubuntu.com/azure.archive.ubuntu.com/g' /etc/apt/sources.list || true
+          [ -f /etc/apt/sources.list ] && sudo sed -i 's/security.ubuntu.com/azure.archive.ubuntu.com/g' /etc/apt/sources.list || true
+          [ -f /etc/apt/sources.list.d/ubuntu.sources ] && sudo sed -i 's/archive.ubuntu.com/azure.archive.ubuntu.com/g' /etc/apt/sources.list.d/ubuntu.sources || true
+          [ -f /etc/apt/sources.list.d/ubuntu.sources ] && sudo sed -i 's/security.ubuntu.com/azure.archive.ubuntu.com/g' /etc/apt/sources.list.d/ubuntu.sources || true
+          echo 'Acquire::http::Timeout "30";' | sudo tee /etc/apt/apt.conf.d/99custom > /dev/null
+          echo 'Acquire::ftp::Timeout "30";' | sudo tee -a /etc/apt/apt.conf.d/99custom > /dev/null
+          echo 'Acquire::Retries "5";' | sudo tee -a /etc/apt/apt.conf.d/99custom > /dev/null
+          echo 'Acquire::ForceIPv4 "true";' | sudo tee -a /etc/apt/apt.conf.d/99custom > /dev/null
           sudo apt-get update
           sudo apt-get -y install \
             bluez \
