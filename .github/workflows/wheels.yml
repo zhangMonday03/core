@@ -135,7 +135,7 @@ jobs:
           sed -i "/uv/d" requirements_diff.txt
 
       - name: Build wheels
-        uses: home-assistant/wheels@2024.11.0
+        uses: home-assistant/wheels@2026.07.0
         with:
           abi: ${{ matrix.abi }}
           tag: musllinux_1_2
@@ -198,7 +198,7 @@ jobs:
           split -l $(expr $(expr $(cat requirements_all.txt | wc -l) + 1) / 3) requirements_all_wheels_${{ matrix.arch }}.txt requirements_all.txt
 
       - name: Build wheels (part 1)
-        uses: home-assistant/wheels@2024.11.0
+        uses: home-assistant/wheels@2026.07.0
         with:
           abi: ${{ matrix.abi }}
           tag: musllinux_1_2
@@ -212,7 +212,7 @@ jobs:
           requirements: "requirements_all.txtaa"
 
       - name: Build wheels (part 2)
-        uses: home-assistant/wheels@2024.11.0
+        uses: home-assistant/wheels@2026.07.0
         with:
           abi: ${{ matrix.abi }}
           tag: musllinux_1_2
@@ -226,7 +226,7 @@ jobs:
           requirements: "requirements_all.txtab"
 
       - name: Build wheels (part 3)
-        uses: home-assistant/wheels@2024.11.0
+        uses: home-assistant/wheels@2026.07.0
         with:
           abi: ${{ matrix.abi }}
           tag: musllinux_1_2
